@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BKOS-2.0 IMU Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status.connected {
+            border-left: 5px solid #10b981;
+        }
+        
+        .status.disconnected {
+            border-left: 5px solid #ef4444;
+        }
+
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status.connected .status-indicator {
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .status.disconnected .status-indicator {
+            background-color: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .data-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .data-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .data-card h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #667eea;
+            font-size: 1.5em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .data-value {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 1.1em;
+        }
+        
+        .data-value:last-child {
+            border-bottom: none;
+        }
+        
+        .label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 BKOS-2.0 IMU Dashboard</h1>
+        
+        <div class="status disconnected" id="status">
+            <span class="status-indicator"></span>
+            <strong>Status:</strong> <span id="statusText">Connecting...</span>
+        </div>
+        
+        <div class="data-grid">
+            <div class="data-card">
+                <h2>📐 Thigh Angles</h2>
+                <div class="data-value">
+                    <span class="label">X-Axis:</span>
+                    <span class="value" id="thigh-x">--</span>
+                </div>
+                <div class="data-value">
+                    <span class="label">Y-Axis:</span>
+                    <span class="value" id="thigh-y">--</span>
+                </div>
+                <div class="data-value">
+                    <span class="label">Z-Axis:</span>
+                    <span class="value" id="thigh-z">--</span>
+                </div>
+            </div>
+            
+            <div class="data-card">
+                <h2>🦵 Knee Angles</h2>
+                <div class="data-value">
+                    <span class="label">X-Axis:</span>
+                    <span class="value" id="knee-x">--</span>
+                </div>
+                <div class="data-value">
+                    <span class="label">Y-Axis:</span>
+                    <span class="value" id="knee-y">--</span>
+                </div>
+                <div class="data-value">
+                    <span class="label">Z-Axis:</span>
+                    <span class="value" id="knee-z">--</span>
+                </div>
+            </div>
+            
+            <div class="data-card">
+                <h2>🦴 Shin Angles</h2>
+                <div class="data-value">
+                    <span class="label">X-Axis:</span>
+                    <span class="value" id="shin-x">--</span>
+                </div>
+                <div class="data-value">
+                    <span class="label">Y-Axis:</span>
+                    <span class="value" id="shin-y">--</span>
+                </div>
+                <div class="data-value">
+                    <span class="label">Z-Axis:</span>
+                    <span class="value" id="shin-z">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Real-time IMU data visualization | Updates every 0.5 seconds</p>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        const statusDiv = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
+
+        function connect() {
+            console.log('Attempting to connect to WebSocket server...');
+            ws = new WebSocket('ws://localhost:8765');
+            
+            ws.onopen = () => {
+                console.log('✅ Connected to server');
+                statusDiv.className = 'status connected';
+                statusText.textContent = 'Connected to WebSocket Server';
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received data:', data);
+                    
+                    // Update thigh values
+                    if (data.thigh) {
+                        document.getElementById('thigh-x').textContent = data.thigh.x.toFixed(2) + '°';
+                        document.getElementById('thigh-y').textContent = data.thigh.y.toFixed(2) + '°';
+                        document.getElementById('thigh-z').textContent = data.thigh.z.toFixed(2) + '°';
+                    }
+                    
+                    // Update knee values
+                    if (data.knee) {
+                        document.getElementById('knee-x').textContent = data.knee.x.toFixed(2) + '°';
+                        document.getElementById('knee-y').textContent = data.knee.y.toFixed(2) + '°';
+                        document.getElementById('knee-z').textContent = data.knee.z.toFixed(2) + '°';
+                    }
+                    
+                    // Update shin values
+                    if (data.shin) {
+                        document.getElementById('shin-x').textContent = data.shin.x.toFixed(2) + '°';
+                        document.getElementById('shin-y').textContent = data.shin.y.toFixed(2) + '°';
+                        document.getElementById('shin-z').textContent = data.shin.z.toFixed(2) + '°';
+                    }
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('❌ WebSocket error:', error);
+                statusDiv.className = 'status disconnected';
+                statusText.textContent = 'Error connecting to server';
+            };
+            
+            ws.onclose = () => {
+                console.log('⚠️ Disconnected from server');
+                statusDiv.className = 'status disconnected';
+                statusText.textContent = 'Disconnected - Retrying in 2 seconds...';
+                
+                // Try to reconnect after 2 seconds
+                setTimeout(connect, 2000);
+            };
+        }
+        
+        // Start connection when page loads
+        connect();
+    </script>
+</body>
+</html>
